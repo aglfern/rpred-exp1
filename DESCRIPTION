@@ -1,0 +1,17 @@
+Package: Experiment1
+Type: Package
+Title: Implements the first experiment for the Master's Thesys
+Version: 0.1.0
+Author: Alexandre G. L. Fernandes based on the original source code created by Claudio Amaral
+Maintainer: Alexandre G. L. Fernandes <aglfern@gmail.com>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Imports: 
+   data.table,
+   readr,
+   dplyr,
+   sets
+   
