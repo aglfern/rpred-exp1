@@ -145,12 +145,18 @@ dataset_preproc_version1 <- function(ds, fileVersion)
    ds$remaining_stc <- ds$closed_at_stc - ds$updated_at_stc
    #incidentevtlog$remaining_stc <- incidentevtlog$resolved_at_stc - incidentevtlog$updated_at_stc
 
-   # tempo de sojourn a ser preenchido na construcao do modelo
+   # cria e inicializa - tempo de sojourn a ser preenchido na construcao do modelo
+   ds$sojourn_set_stc <-  NULL
+   ds$sojourn_mset_stc <-  NULL
+   ds$sojourn_seq_stc <-  NULL
    ds$sojourn_set_stc <-  0
    ds$sojourn_mset_stc <-  0
    ds$sojourn_seq_stc <-  0
 
    #cria colunas para os estados
+   ds$seq_state_id <- NULL
+   ds$set_state_id <- NULL
+   ds$mset_state_id <- NULL
    ds$seq_state_id <- 0
    ds$set_state_id <- 0
    ds$mset_state_id <- 0

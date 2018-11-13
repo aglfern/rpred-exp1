@@ -12,6 +12,7 @@ LazyData: true
 Imports: 
    data.table,
    readr,
+   plyr,
    dplyr,
    sets
    

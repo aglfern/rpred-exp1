@@ -16,3 +16,20 @@ generate_log <- function(texto,nivel=1) {
    if (nivel <= LOG_LEVEL )
       print(paste(Sys.time(), ":", texto))
 }
+
+
+
+library(corrplot)
+library(plyr) # antes de Hmisc e dplyr
+library(Hmisc) # antes de dplyr e fields
+library(tidyr) # antes de sets
+library(sets) # antes de dplyr e data.table
+library(dplyr) # precisa vir antes do data.table
+library(data.table)
+library(doParallel)
+library(fields)
+library(lsr)
+library(MLmetrics)
+library(nortest)
+library(readr)
+library(writexl)
