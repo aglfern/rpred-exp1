@@ -29,17 +29,19 @@ state_fn2 <- function(astate_list, asigma, amode = "sequence")
    return(Result)
 }
 
-
-find_state_fn2 <- function(astate_list, asigma, amode = "sequence")
-{
-   # pesquisa lista de estados
-   Result <- match(asigma, astate_list)
-   if (is.na(Result))
-   {
-      Result = NIL_STATE
-   }
-   return(Result)
-}
+#
+# Alexandre: funcao removida, trocada pelo match, com parametro de retorno quando NO MATCH
+#
+# find_state_fn2 <- function(astate_list, asigma, amode = "sequence")
+# {
+#    # pesquisa lista de estados
+#    Result <- match(asigma, astate_list)
+#    if (is.na(Result))
+#    {
+#       Result = NIL_STATE
+#    }
+#    return(Result)
+# }
 
 #' funcao de construcao do MTA, recebe o trace, lista de instancias
 #' C�digo fonte original
@@ -86,7 +88,7 @@ build_ats <- function(aevents, horiz, sel_attributes)
    for(i in 1:nrow(traces))
    {
 
-      if ( is.integer(i/100) ) generate_log(paste("     trace",i),2)
+      #print(paste("inicio loop principal: ",i))
 
       # busca eventos do caso / search events of the given trace
       traceEvents <- events[events$number == traces$number[i],]
@@ -103,88 +105,101 @@ build_ats <- function(aevents, horiz, sel_attributes)
 
       activity_fields <- do.call(paste, as.data.frame(traceEvents[,sel_attributes]))
 
-      # tempo em que ocorreu o evento
+      # vector with the timestamps for when the event has started
       timestamp_field <-  as.vector(traceEvents[, EVENT_TIMESTAMP_COLUMN_NAME])
-      #timestamp_field <-  as.vector(trace[,c("sys_updated_on")])
-      # listas com os modelos de abstração usados para representação dos eventos
+
+      # Step 1: populate the lists of states for each abstraction
       seq_list <- list()
       set_list <- list()
       mset_list <- list()
       for (j in 1:nrow(traceEvents))
       {
-         # calculo do horizonte
+         #print(paste("inicio loop 1: ",j))
+
+         # calculate based on the horizon
          horiz_index <- max(j - horiz + 1, 1)
 
+         # generates state for SEQUENCE abstration
          inc_seq <- as.character(activity_fields[horiz_index:j])
-
-         # gera abstracoes - sequence
          seq_list[[j]]  <- toString(inc_seq)
 
-         # set
+         # generates state for SET
          inc_set <- as.set(inc_seq)
          set_list[[j]]  <- toString(inc_set)
+         #stateId <- state_fn2(set_state_list, set_list[[j]])
+         stateId <- match(set_list[[j]],set_state_list,NIL_STATE)
+         if ( stateId == NIL_STATE ) {
+            set_state_list <- append(set_state_list, set_list[[j]])
+            stateId <- length(set_state_list)
+         }
 
-         # multi-set
+         # generates state for multi-set
          inc_gset <- as.gset(inc_seq)
          inc_gset_str <- toString(rbind(gset_support(inc_gset), gset_memberships(inc_gset)))
          mset_list[[j]]  <- inc_gset_str
 
-         # chama função para avaliar os estados e gerar o estado atual
-         # argumentos: lista de estados atual
-         #             trace dos eventos anteriores + evento atual
-         # retorna:    novo estado
-         # modelo de abstração sequencia
-         traceEvents[j,"set_state_id"] <- state_fn2(set_state_list, set_list[[j]], "set")
-
-         if (horiz==1) # horizonte 1, todos iguais
+         if (horiz==1) # horizon == 1, all will be the same
          {
-            # idem com modelo multiset (ainda não concluido)
-            traceEvents[j,"mset_state_id"] <- traceEvents[j,"set_state_id"]
-            # modelo de abstração sequencia
-            traceEvents[j,"seq_state_id"] <- traceEvents[j,"set_state_id"]
+            traceEvents[j,c("set_state_id","mset_state_id","seq_state_id")] <- stateId
          }
          else
          {
-            # idem com modelo multiset
-            traceEvents[j,"mset_state_id"] <- state_fn2(mset_state_list, mset_list[[j]] , "mset")
-            # modelo de abstracao sequencia
-            traceEvents[j,"seq_state_id"] <- state_fn2(seq_state_list, seq_list[[j]], "sequence")
-         }
+            traceEvents[j,"set_state_id"] <- stateId
 
-         if (j==1) # primeiro registro guarda elapsed quando entrou no estado
-         {
-            curr_sojourn_set_stc <- traceEvents[j,"elapsed_stc"]
-            curr_sojourn_mset_stc <- traceEvents[j,"elapsed_stc"]
-            curr_sojourn_seq_stc <- traceEvents[j,"elapsed_stc"]
+            # now for the multi-set
+            #traceEvents[j,"mset_state_id"] <- state_fn2(mset_state_list, inc_gset_str)
+
+            stateId <- match(mset_list[[j]],mset_state_list,NIL_STATE)
+            if ( stateId == NIL_STATE ) {
+                mset_state_list <- append(mset_state_list, mset_list[[j]])
+                stateId <- length(mset_state_list)
+            }
+            traceEvents[j,"mset_state_id"] <- stateId
+
+            # and for the sequence
+            #traceEvents[j,"seq_state_id"] <- state_fn2(seq_state_list, seq_list[[j]])
+
+            stateId <- match(seq_list[[j]],seq_state_list,NIL_STATE)
+            if ( stateId == NIL_STATE ) {
+               seq_state_list <- append(seq_state_list, seq_list[[j]])
+               stateId <- length(seq_state_list)
+            }
+
+            traceEvents[j,"seq_state_id"] <- stateId
+         }
+      }
+      # Step 2, calculate the sojourn
+      curr_sojourn_set_state <- traceEvents[1,"set_state_id"]
+      curr_sojourn_mset_state <- traceEvents[1,"mset_state_id"]
+      curr_sojourn_seq_state <- traceEvents[1,"seq_state_id"]
+      curr_sojourn_set_stc <- 0
+      curr_sojourn_mset_stc <- 0
+      curr_sojourn_seq_stc <- 0
+      # first event of each case, the sojourn will be always zero
+      for (j in 2:nrow(traceEvents))
+      {
+         #print(paste("inicio loop 2: ",j))
+
+         elapsed <- traceEvents[j,"elapsed_stc"]
+         # advances until it reaches a distinct state - for SET
+         if ( traceEvents[j,"set_state_id"] != curr_sojourn_set_state ) {
             curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
-            curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
-            curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
+            traceEvents[j,"sojourn_set_stc"] <- elapsed - curr_sojourn_set_stc
+            curr_sojourn_set_stc <- elapsed
          }
-         else
-         { # set
-            if (curr_sojourn_set_state == traceEvents[j,"set_state_id"])
-               traceEvents[j,"sojourn_set_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_set_stc
-            else
-            {
-               curr_sojourn_set_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
-            }
-            # mset
-            if (curr_sojourn_mset_state == traceEvents[j,"mset_state_id"])
-               traceEvents[j,"sojourn_mset_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_mset_stc
-            else
-            {
-               curr_sojourn_mset_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
-            }
-            #seq
-            if (curr_sojourn_seq_state == traceEvents[j,"seq_state_id"])
-               traceEvents[j,"sojourn_seq_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_seq_stc
-            else
-            {
-               curr_sojourn_seq_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
-            }
+
+         # now for MULTI-SET
+         if ( traceEvents[j,"mset_state_id"] != curr_sojourn_mset_state ) {
+            curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
+            traceEvents[j,"sojourn_mset_stc"] <- elapsed - curr_sojourn_mset_stc
+            curr_sojourn_mset_stc <- elapsed
+         }
+
+         # and now for SEQUENCE
+         if ( traceEvents[j,"seq_state_id"] != curr_sojourn_seq_state ) {
+            curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
+            traceEvents[j,"sojourn_seq_stc"] <- elapsed - curr_sojourn_seq_stc
+            curr_sojourn_seq_stc <- elapsed
          }
 
       } # fim j
@@ -257,14 +272,10 @@ build_prediction <- function(aevents, ats)
       seq_states=list()
    )
 
-   # horizonte
-   #horiz <- Inf
-   #horiz <- 5
    # listas com os estados de cada modelo
    seq_state_list <- ats$seq_state_list
    set_state_list <- ats$set_state_list
    mset_state_list <- ats$mset_state_list
-
 
    for(i in 1:nrow(traces))
    {
@@ -290,86 +301,76 @@ build_prediction <- function(aevents, ats)
       mset_list <- list()
       for (j in 1:nrow(traceEvents))
       {
-         # calculo do horizonte
+         # calculate the horizon
          horiz_index <- max(j - ats$horiz + 1, 1)
 
+         # generates state for SEQUENCE abstration
          inc_seq <- as.character(activity_fields[horiz_index:j])
-
-         # gera abstracao sequence
          seq_list[[j]]  <- toString(inc_seq)
 
-         # set
+         # generates state for SET
          inc_set <- as.set(inc_seq)
          set_list[[j]]  <- toString(inc_set)
 
-         # multi-set
+         # multi-set (requires package sets)
          inc_gset <- as.gset(inc_seq)
-         inc_gset_str <- toString(
-            rbind(gset_support(inc_gset), gset_memberships(inc_gset))
-         )
-
+         inc_gset_str <- toString(rbind(gset_support(inc_gset), gset_memberships(inc_gset)))
          mset_list[[j]]  <- inc_gset_str
 
-         # chama função para avaliar os estados e gerar o estado atual
-         # argumentos: lista de estados atual
-         #             trace dos eventos anteriores + evento atual
-         # retorna:    novo estado
-
-         # idem ao anterior com modelo de abstração set
-         traceEvents[j,"set_state_id"] <- find_state_fn2(set_state_list, set_list[[j]], "set")
+         #traceEvents[j,"set_state_id"] <- find_state_fn2(set_state_list, set_list[[j]], "set")
+         stateId <- match(set_list[[j]], set_state_list, NIL_STATE)
 
          if (ats$horiz==1) # horizonte 1, todos iguais
          {
-            # idem com modelo multiset (ainda não concluido)
-            traceEvents[j,"mset_state_id"] <- traceEvents[j,"set_state_id"]
-            # modelo de abstração sequencia
-            traceEvents[j,"seq_state_id"] <- traceEvents[j,"set_state_id"]
+            traceEvents[j,c("set_state_id","mset_state_id","seq_state_id")] <- stateId
          }
          else
          {
+            traceEvents[j,"set_state_id"] <- stateId
             # idem com modelo multiset
-            traceEvents[j,"mset_state_id"] <- find_state_fn2(mset_state_list, mset_list[[j]] , "mset")
-            # modelo de abstração sequencia
-            traceEvents[j,"seq_state_id"] <- find_state_fn2(seq_state_list, seq_list[[j]], "sequence")
+            #traceEvents[j,"mset_state_id"] <- find_state_fn2(mset_state_list, mset_list[[j]] , "mset")
+            traceEvents[j,"mset_state_id"] <- match(mset_list[[j]], mset_state_list, NIL_STATE)
+            # modelo de abstracao sequencia
+            #traceEvents[j,"seq_state_id"] <- find_state_fn2(seq_state_list, seq_list[[j]], "sequence")
+            traceEvents[j,"seq_state_id"] <- match(seq_list[[j]], seq_state_list, NIL_STATE)
          }
+      }
 
-         if (j==1) # primeiro registro guarda elapsed quando entrou no estado
-         {
-            curr_sojourn_set_stc <- traceEvents[j,"elapsed_stc"]
-            curr_sojourn_mset_stc <- traceEvents[j,"elapsed_stc"]
-            curr_sojourn_seq_stc <- traceEvents[j,"elapsed_stc"]
+      # Step 2, calculate the sojourn
+      curr_sojourn_set_state <- traceEvents[1,"set_state_id"]
+      curr_sojourn_mset_state <- traceEvents[1,"mset_state_id"]
+      curr_sojourn_seq_state <- traceEvents[1,"seq_state_id"]
+      curr_sojourn_set_stc <- 0
+      curr_sojourn_mset_stc <- 0
+      curr_sojourn_seq_stc <- 0
+      # first event of each case, the sojourn will be always zero
+      for (j in 2:nrow(traceEvents))
+      {
+         #print(paste("inicio loop 2: ",j))
+
+         elapsed <- traceEvents[j,"elapsed_stc"]
+         # advances until it reaches a distinct state - for SET
+         if ( traceEvents[j,"set_state_id"] != curr_sojourn_set_state ) {
             curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
-            curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
-            curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
-         }
-         else
-         { # set
-            if (curr_sojourn_set_state == traceEvents[j,"set_state_id"])
-               traceEvents[j,"sojourn_set_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_set_stc
-            else
-            {
-               curr_sojourn_set_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
-            }
-            # mset
-            if (curr_sojourn_mset_state == traceEvents[j,"mset_state_id"])
-               traceEvents[j,"sojourn_mset_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_mset_stc
-            else
-            {
-               curr_sojourn_mset_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
-            }
-            #seq
-            if (curr_sojourn_seq_state == traceEvents[j,"seq_state_id"])
-               traceEvents[j,"sojourn_seq_stc"] <- traceEvents[j,"elapsed_stc"] - curr_sojourn_seq_stc
-            else
-            {
-               curr_sojourn_seq_stc <- traceEvents[j,"elapsed_stc"]
-               curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
-            }
+            traceEvents[j,"sojourn_set_stc"] <- elapsed - curr_sojourn_set_stc
+            curr_sojourn_set_stc <- elapsed
          }
 
+         # now for MULTI-SET
+         if ( traceEvents[j,"mset_state_id"] != curr_sojourn_mset_state ) {
+            curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
+            traceEvents[j,"sojourn_mset_stc"] <- elapsed - curr_sojourn_mset_stc
+            curr_sojourn_mset_stc <- elapsed
+         }
+
+         # and now for SEQUENCE
+         if ( traceEvents[j,"seq_state_id"] != curr_sojourn_seq_state ) {
+            curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
+            traceEvents[j,"sojourn_seq_stc"] <- elapsed - curr_sojourn_seq_stc
+            curr_sojourn_seq_stc <- elapsed
+         }
       } # fim j
+
       # armazena resultado das transições de estado para instancia atual
       # modelo de abstração sequencia
       traces_states$seq_states[i] <- list(traceEvents[,"seq_state_id"])
@@ -389,7 +390,6 @@ build_prediction <- function(aevents, ats)
       events[events$number == traces$number[i],]$sojourn_seq_stc <- traceEvents$sojourn_seq_stc
 
    } # fim i
-   #i <- 4
 
    # retorna resultado - precisa atualizar a lista de eventos original, para os c�lculos
    eval.parent(substitute(aevents<-events))
@@ -417,20 +417,22 @@ build_prediction <- function(aevents, ats)
 #' @export
 #'
 #' @examples
-eval_model_gen_fn <- function(lsel_traces_list)
+#eval_model_gen_fn <- function(lsel_traces_list)
+eval_model_gen_fn <- function(events)
 {
    summary_pred_stats <- NULL
    result <- NULL
-   for (sel_trace_ in lsel_traces_list)
+#   for (sel_trace_ in lsel_traces_list)
+   for (fold_events in events)
    {
-
-      incidentevtlog_anot <- as.data.frame(
-         sel_trace_[, c("number", "updated_at", "incident_state", "seq_state_id","set_state_id", "mset_state_id",
+      #incidentevtlog_anot<- as.data.frame(
+      events_anot <- as.data.frame(
+         fold_events[, c("number", "updated_at", "incident_state", "seq_state_id","set_state_id", "mset_state_id",
                         "sojourn_set_stc","sojourn_mset_stc","sojourn_seq_stc","elapsed_stc", "remaining_stc")]
       )
 
-      # teste estatistica convertida
-      incidentevtlog_anot$remaining_stc <- incidentevtlog_anot$remaining_stc
+      # teste estatistica convertida # Alexandre: o que faz esse c�digo aqui?
+      events_anot$remaining_stc <- events_anot$remaining_stc
 
       # gerar as contagens e medias por estado
       # num_secs <- 1 * 60 * 60 # em horas
@@ -442,8 +444,8 @@ eval_model_gen_fn <- function(lsel_traces_list)
       # predição no primeiro conjunto treinamento - demais validação
       if (is.null(summary_pred_stats))
       {
-         # filtrar os valores que são estados finais pois distorcem a media
-         incidentevtlog_anot_st <- incidentevtlog_anot[incidentevtlog_anot$remaining_stc > 0,]
+         # filtrar os valores que sao estados finais pois distorcem a media
+         incidentevtlog_anot_st <- events_anot[events_anot$remaining_stc > 0,]
 
          summary_set <- gen_summary_pred_fn(incidentevtlog_anot_st, 'set_state_id','remaining_stc')
          summary_mset <- gen_summary_pred_fn(incidentevtlog_anot_st, 'mset_state_id','remaining_stc')
@@ -460,50 +462,50 @@ eval_model_gen_fn <- function(lsel_traces_list)
 
       # atualiza predited values media, mediana e desvio padr�o
       # set
-      incidentevtlog_anot$remaining_stc_pset_mean <-
-         summary_set$mean[match(incidentevtlog_anot$set_state_id, summary_set$set_state_id)] +
-         summary_sj_set$mean[match(incidentevtlog_anot$set_state_id, summary_sj_set$set_state_id)] -
-         incidentevtlog_anot$sojourn_set_stc
-      incidentevtlog_anot$remaining_stc_pset_median <-
-         summary_set$median[match(incidentevtlog_anot$set_state_id, summary_set$set_state_id)] +
-         summary_sj_set$median[match(incidentevtlog_anot$set_state_id, summary_sj_set$set_state_id)] -
-         incidentevtlog_anot$sojourn_set_stc
-      incidentevtlog_anot$remaining_stc_pset_sd <-
-         summary_set$sd[match(incidentevtlog_anot$set_state_id, summary_set$set_state_id)] +
-         summary_sj_set$sd[match(incidentevtlog_anot$set_state_id, summary_sj_set$set_state_id)] -
-         incidentevtlog_anot$sojourn_set_stc
+      events_anot$remaining_stc_pset_mean <-
+         summary_set$mean[match(events_anot$set_state_id, summary_set$set_state_id)] +
+         summary_sj_set$mean[match(events_anot$set_state_id, summary_sj_set$set_state_id)] -
+         events_anot$sojourn_set_stc
+      events_anot$remaining_stc_pset_median <-
+         summary_set$median[match(events_anot$set_state_id, summary_set$set_state_id)] +
+         summary_sj_set$median[match(events_anot$set_state_id, summary_sj_set$set_state_id)] -
+         events_anot$sojourn_set_stc
+      events_anot$remaining_stc_pset_sd <-
+         summary_set$sd[match(events_anot$set_state_id, summary_set$set_state_id)] +
+         summary_sj_set$sd[match(events_anot$set_state_id, summary_sj_set$set_state_id)] -
+         events_anot$sojourn_set_stc
 
       # multi set
-      incidentevtlog_anot$remaining_stc_pmset_mean <-
-         summary_mset$mean[match(incidentevtlog_anot$mset_state_id, summary_mset$mset_state_id)] +
-         summary_sj_mset$mean[match(incidentevtlog_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
-         incidentevtlog_anot$sojourn_mset_stc
-      incidentevtlog_anot$remaining_stc_pmset_median <-
-         summary_mset$median[match(incidentevtlog_anot$mset_state_id, summary_mset$mset_state_id)] +
-         summary_sj_mset$median[match(incidentevtlog_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
-         incidentevtlog_anot$sojourn_mset_stc
-      incidentevtlog_anot$remaining_stc_pmset_sd <-
-         summary_mset$sd[match(incidentevtlog_anot$mset_state_id, summary_mset$mset_state_id)] +
-         summary_sj_mset$sd[match(incidentevtlog_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
-         incidentevtlog_anot$sojourn_mset_stc
+      events_anot$remaining_stc_pmset_mean <-
+         summary_mset$mean[match(events_anot$mset_state_id, summary_mset$mset_state_id)] +
+         summary_sj_mset$mean[match(events_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
+         events_anot$sojourn_mset_stc
+      events_anot$remaining_stc_pmset_median <-
+         summary_mset$median[match(events_anot$mset_state_id, summary_mset$mset_state_id)] +
+         summary_sj_mset$median[match(events_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
+         events_anot$sojourn_mset_stc
+      events_anot$remaining_stc_pmset_sd <-
+         summary_mset$sd[match(events_anot$mset_state_id, summary_mset$mset_state_id)] +
+         summary_sj_mset$sd[match(events_anot$mset_state_id, summary_sj_mset$mset_state_id)] -
+         events_anot$sojourn_mset_stc
 
       # sequence
-      incidentevtlog_anot$remaining_stc_pseq_mean <-
-         summary_seq$mean[match(incidentevtlog_anot$seq_state_id, summary_seq$seq_state_id)] +
-         summary_sj_seq$mean[match(incidentevtlog_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
-         incidentevtlog_anot$sojourn_seq_stc
-      incidentevtlog_anot$remaining_stc_pseq_median <-
-         summary_seq$median[match(incidentevtlog_anot$seq_state_id, summary_seq$seq_state_id)] +
-         summary_sj_seq$median[match(incidentevtlog_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
-         incidentevtlog_anot$sojourn_seq_stc
-      incidentevtlog_anot$remaining_stc_pseq_sd <-
-         summary_seq$sd[match(incidentevtlog_anot$seq_state_id, summary_seq$seq_state_id)] +
-         summary_sj_seq$sd[match(incidentevtlog_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
-         incidentevtlog_anot$sojourn_seq_stc
+      events_anot$remaining_stc_pseq_mean <-
+         summary_seq$mean[match(events_anot$seq_state_id, summary_seq$seq_state_id)] +
+         summary_sj_seq$mean[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
+         events_anot$sojourn_seq_stc
+      events_anot$remaining_stc_pseq_median <-
+         summary_seq$median[match(events_anot$seq_state_id, summary_seq$seq_state_id)] +
+         summary_sj_seq$median[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
+         events_anot$sojourn_seq_stc
+      events_anot$remaining_stc_pseq_sd <-
+         summary_seq$sd[match(events_anot$seq_state_id, summary_seq$seq_state_id)] +
+         summary_sj_seq$sd[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
+         events_anot$sojourn_seq_stc
 
 
       # remove valorers sem match para calculo erro
-      incidentevtlog_anot_err <- na.omit(incidentevtlog_anot)
+      incidentevtlog_anot_err <- na.omit(events_anot)
       # remove valores dos estados finais Target = 0 que distorcem a média
       # valores do ultimo estado serão sempre precisos
       incidentevtlog_anot_err <- incidentevtlog_anot_err[incidentevtlog_anot_err$remaining_stc > 0,]
@@ -550,14 +552,14 @@ eval_model_gen_fn <- function(lsel_traces_list)
 
       #non fitting
       non_fit_arr <- c(
-         nrow(sel_trace_),
-         nrow(incidentevtlog_anot),
-         nrow(incidentevtlog_anot[incidentevtlog_anot$set_state_id == NIL_STATE,]),
-         nrow(incidentevtlog_anot[incidentevtlog_anot$mset_state_id == NIL_STATE,]),
-         nrow(incidentevtlog_anot[incidentevtlog_anot$seq_state_id == NIL_STATE,]),
-         length(unique(incidentevtlog_anot$set_state_id)),
-         length(unique(incidentevtlog_anot$mset_state_id)),
-         length(unique(incidentevtlog_anot$seq_state_id))
+         nrow(fold_events),
+         nrow(events_anot),
+         nrow(events_anot[events_anot$set_state_id == NIL_STATE,]),
+         nrow(events_anot[events_anot$mset_state_id == NIL_STATE,]),
+         nrow(events_anot[events_anot$seq_state_id == NIL_STATE,]),
+         length(unique(events_anot$set_state_id)),
+         length(unique(events_anot$mset_state_id)),
+         length(unique(events_anot$seq_state_id))
       )
       names(non_fit_arr) <- c("num_evt_tot","num_evt_ok","num_evt_nf_set",
                               "num_evt_nf_mset","num_evt_nf_seq", "num_set_states",
@@ -648,6 +650,8 @@ eval_model_gen_fn <- function(lsel_traces_list)
 #' @export
 #'
 #' @examples
+#'  summary_set <- gen_summary_pred_fn(incidentevtlog_anot_st, 'set_state_id','remaining_stc')
+
 gen_summary_pred_fn <- function(data=NULL, groupvars=NULL, measurevar,  na.rm=TRUE,
                                 conf.interval=.95, .drop=TRUE) {
 
@@ -692,3 +696,159 @@ gen_summary_pred_fn <- function(data=NULL, groupvars=NULL, measurevar,  na.rm=TR
 
    return(datac)
 }
+
+
+
+
+
+#' Title
+#'
+#' @param fold_events
+#' @param resultFile
+#' @param type
+#' @param fold
+#' @param horiz
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#'
+#' This function was extrated from the original function
+#' #eval_model_gen_fn <- function(lsel_traces_list)
+#' #eval_model_gen_fn <- function(events)
+#'
+annotate_model <- function(fold_events, resultFile, type, fold, horiz)
+{
+   summary_pred_stats <- NULL
+   result <- NULL
+
+   events_anot <- as.data.frame(
+      fold_events[, c("number", "updated_at", "incident_state", "seq_state_id","set_state_id", "mset_state_id",
+                      "sojourn_set_stc","sojourn_mset_stc","sojourn_seq_stc","elapsed_stc", "remaining_stc")]
+   )
+
+   # filtrar os valores que sao estados finais pois distorcem a media
+   events_anot_filtered  <- events_anot[events_anot$remaining_stc > 0,]
+
+   summary_set <- gen_summary_pred_fn(events_anot_filtered, 'set_state_id','remaining_stc')
+   summary_mset <- gen_summary_pred_fn(events_anot_filtered, 'mset_state_id','remaining_stc')
+   summary_seq <- gen_summary_pred_fn(events_anot_filtered, 'seq_state_id','remaining_stc')
+
+   summary_sj_set <- gen_summary_pred_fn(events_anot_filtered, 'set_state_id','sojourn_set_stc')
+   summary_sj_mset <- gen_summary_pred_fn(events_anot_filtered, 'mset_state_id','sojourn_mset_stc')
+   summary_sj_seq <- gen_summary_pred_fn(events_anot_filtered, 'seq_state_id','sojourn_seq_stc')
+
+   #armazena totais
+   summary_pred_stats <- list(summary_set, summary_mset, summary_seq,
+                              summary_sj_set, summary_sj_mset, summary_sj_seq)
+
+   # atualiza predited values media, mediana e desvio padr�o
+   # set
+   events_anot$remaining_stc_set_state_mean <-
+      summary_set$mean[match(events_anot$set_state_id, summary_set$set_state_id)]
+   events_anot$sojourn_set_state_mean <-
+      summary_sj_set$mean[match(events_anot$set_state_id, summary_sj_set$set_state_id)]
+
+   # prediction based in the mean and sojourn
+   events_anot$remaining_stc_pset_mean <-
+      events_anot$remaining_stc_set_state_mean +
+      events_anot$sojourn_set_state_mean -
+      events_anot$sojourn_set_stc
+
+   # multi set
+   events_anot$remaining_stc_mset_state_mean <-
+      summary_mset$mean[match(events_anot$mset_state_id, summary_mset$mset_state_id)]
+   events_anot$sojourn_mset_state_mean <-
+      summary_sj_mset$mean[match(events_anot$mset_state_id, summary_sj_mset$mset_state_id)]
+
+   # prediction based in the mean and sojourn
+   events_anot$remaining_stc_pmset_mean <-
+      events_anot$remaining_stc_mset_state_mean +
+      events_anot$sojourn_mset_state_mean -
+      events_anot$sojourn_mset_stc
+
+
+   # sequence
+   events_anot$remaining_stc_seq_state_mean <-
+      summary_seq$mean[match(events_anot$seq_state_id, summary_seq$seq_state_id)]
+   events_anot$sojourn_seq_state_mean <-
+      summary_sj_seq$mean[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)]
+
+   # prediction based in the mean and sojourn
+   events_anot$remaining_stc_pseq_mean <-
+      events_anot$remaining_stc_seq_state_mean +
+      events_anot$sojourn_seq_state_mean -
+      events_anot$sojourn_seq_stc
+
+
+
+   # remove valorers sem match para calculo erro
+   # funcao remove todas as linhas que tiverem alguma coluna missing (nula)
+   events_anot_filtered <- na.omit(events_anot)
+   # remove valores dos estados finais Target = 0 que distorcem a media
+   # valores do ultimo estado serao sempre precisos
+   events_anot_filtered <- events_anot_filtered[events_anot_filtered$remaining_stc > 0,]
+
+   # calculo erro  MAPE p todos os registros
+
+   #MAPE(y_pred, y_true)
+   mape_val <- c(
+      MAPE(events_anot_filtered$remaining_stc_pset_mean, events_anot_filtered$remaining_stc),
+      MAPE(events_anot_filtered$remaining_stc_pmset_mean, events_anot_filtered$remaining_stc),
+      MAPE(events_anot_filtered$remaining_stc_pseq_mean, events_anot_filtered$remaining_stc)
+   )
+   names(mape_val) <- c("val_mape_pset_mean","val_mape_pmset_mean","val_mape_pseq_mean")
+
+   #non fitting
+   non_fit_arr <- c(
+      nrow(fold_events),
+      nrow(events_anot),
+      nrow(events_anot[events_anot$set_state_id == NIL_STATE,]),
+      nrow(events_anot[events_anot$mset_state_id == NIL_STATE,]),
+      nrow(events_anot[events_anot$seq_state_id == NIL_STATE,]),
+      length(unique(events_anot$set_state_id)),
+      length(unique(events_anot$mset_state_id)),
+      length(unique(events_anot$seq_state_id))
+   )
+   names(non_fit_arr) <- c("num_evt_tot","num_evt_ok","num_evt_nf_set",
+                           "num_evt_nf_mset","num_evt_nf_seq", "num_set_states",
+                           "num_mset_states", "num_seq_states")
+   non_fit_per_arr <- c(
+      non_fit_arr[c("num_evt_nf_set")] / non_fit_arr[c("num_evt_ok")],
+      non_fit_arr[c("num_evt_nf_mset")] / non_fit_arr[c("num_evt_ok")],
+      non_fit_arr[c("num_evt_nf_seq")] / non_fit_arr[c("num_evt_ok")]
+   )
+   names(non_fit_per_arr) <- c("perr_nf_set","perr_nf_mset","perr_nf_seq")
+
+   non_fit_per_arr <- non_fit_per_arr * 100
+
+   perr_tot_arr <- c(mape_val[c("val_mape_pset_mean")],
+                     mape_val[c("val_mape_pmset_mean")],
+                     mape_val[c("val_mape_pseq_mean")])
+
+   names(perr_tot_arr) <- c("perr_tot_set","perr_tot_mset","perr_tot_seq")
+
+   # filtro para eventos com fit
+   incidentevtlog_anot_err_set1 <- events_anot_filtered[events_anot_filtered$set_state_id != NIL_STATE,]
+   incidentevtlog_anot_err_mset1 <- events_anot_filtered[events_anot_filtered$mset_state_id != NIL_STATE,]
+   incidentevtlog_anot_err_seq1 <- events_anot_filtered[events_anot_filtered$seq_state_id != NIL_STATE,]
+
+   mape_val1 <- c(
+      MAPE(incidentevtlog_anot_err_set1$remaining_stc_pset_mean, incidentevtlog_anot_err_set1$remaining_stc),
+      MAPE(incidentevtlog_anot_err_mset1$remaining_stc_pmset_mean, incidentevtlog_anot_err_mset1$remaining_stc),
+      MAPE(incidentevtlog_anot_err_seq1$remaining_stc_pseq_mean, incidentevtlog_anot_err_seq1$remaining_stc)
+   )
+   names(mape_val1) <- c("val_mape_pset_mean1", "val_mape_pmset_mean1", "val_mape_pseq_mean1")
+
+   # appends to the file that contains all the stats so the error can be recalculated later
+   events_anot <- cbind(type,fold,horiz,events_anot)
+   write.table(events_anot, file=resultFile, row.names=FALSE, col.names = TRUE, append=TRUE, sep=";", dec=",")
+
+   # returns only the summarized results for the given fold and horizon
+   result <- c(fold=type, horizon=horiz, mape_val, non_fit_arr, non_fit_per_arr, perr_tot_arr, mape_val1)
+
+   return(result)
+
+}
+
