@@ -12,22 +12,22 @@ NIL_STATE <- -1
 #' @export
 #'
 #' @examples
-state_fn2 <- function(astate_list, asigma, amode = "sequence")
-{
-   # pesquisa lista de estados
-   lstate_list <- astate_list
-   # print(asigma)
-   # print(lstate_list)
-   Result <- match(asigma, lstate_list)
-   if (is.na(Result))
-   {
-      Result = length(lstate_list) + 1
-      # print(Result)
-      lstate_list[Result] <- asigma
-      eval.parent(substitute(astate_list<-lstate_list))
-   }
-   return(Result)
-}
+# state_fn2 <- function(astate_list, asigma, amode = "sequence")
+# {
+#    # pesquisa lista de estados
+#    lstate_list <- astate_list
+#    # print(asigma)
+#    # print(lstate_list)
+#    Result <- match(asigma, lstate_list)
+#    if (is.na(Result))
+#    {
+#       Result = length(lstate_list) + 1
+#       # print(Result)
+#       lstate_list[Result] <- asigma
+#       eval.parent(substitute(astate_list<-lstate_list))
+#    }
+#    return(Result)
+# }
 
 #
 # Alexandre: funcao removida, trocada pelo match, com parametro de retorno quando NO MATCH

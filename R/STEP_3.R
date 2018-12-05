@@ -12,26 +12,30 @@ STATUS_COLUMN_NAME <- "incident_state"
 EVENT_TIMESTAMP_COLUMN_NAME <- "updated_at"
 CLOSED_STATUS_VALUE <- "Closed"
 
-S2_FILENAME <- "step1_ds1.csv"
 
 KFOLDS <- 5 # number of folds for the k-fold cross validation strategy
 
 #LOG_LEVEL <- 1
 
-STEP_3(c("Inf"),1)
+STEP_3(c(Inf),1)
+
+STEP_3() # to execute for all folds and the six horizons
 
 #rm(events_list,events_row,model,model_list,model_row,predict,testingFold,trainingFold)
 #rm(logfile,ds,traces,folds,filePaths,ats_list,eval_stats_arr,eval_stats_arr_,eval_stats_t,eval_stats_t00)
 
 
-STEP_3 <- function(horizons, justFold=0)
+STEP_3 <- function(horizons=c(1,3,5,6,7,Inf), justFold=0)
 {
    generate_log(" ************* Initiating STEP 3 *************", 1)
 
+
+   # attribute selection step
+   #sel_attributes <- attribute_selection(logfile,1)
+   sel_attributes <- c("incident_state", "category", "priority") # expert
+
    startTime <- format(Sys.time(), "%Y%m%d-%H%M")
    statsFile <- NULL # the base name for the files that will store all the results
-
-   #if (is.NA(horizons)) horizons <- c(1,3,5,6,7,Inf)
 
    # logic to determine which fold files will be loaded
    if ( justFold == 0 )
@@ -63,12 +67,12 @@ STEP_3 <- function(horizons, justFold=0)
       generate_log(paste("***** Starting fold ",i," *****"))
       model_row <- NULL
       events_row <- NULL
+      rfn <- file.path("data/test",paste(statsFile,"fold_",i,"_pred.csv",sep=""))
       for( j in 1:length(horizons) )
       {
          # builds the transition system
          model <- build_ats(trainingFold,horizons[j],sel_attributes)
          # anotates the transition system
-         rfn <- file.path("data/test",paste(statsFile,"_pred.csv",sep=""))
          training_stats <- annotate_model(trainingFold, rfn, "T", i, horizons[j])
 
          # builds the transition system for teh testing fold
@@ -115,69 +119,11 @@ STEP_3 <- function(horizons, justFold=0)
    generate_log("Step 3 completed successfully.",2)
 
 
-   return(eval_stats_df2)
+   return(eval_stats_df3)
 
 }
 
 
-
-#' Saves the folds into separated CSV files, returning the filepaths
-#'
-#' @param traces
-#' @param folds
-#' @param k
-#'
-#' @return List of filepaths, being odd numbers the training seet and even numbers the testing set
-#' @export
-#'
-#' @examples
-save_kfolds <- function(events, traces, folds, k)
-{
-   filePaths <- vector("list",2*k)
-   fileN <- 1
-   for(i in 1:k)
-   {
-      # training file for execution i
-      filePaths[fileN] <- file.path("data/test",paste("fold",i,"_train.csv",sep=""))
-      sel_traces <- data.table(number=folds[["trainingSet"]][[i]], stringsAsFactors = FALSE)
-      sel_events <- events[which(events$number %in% sel_traces$number),]
-      write.csv(sel_events, file=filePaths[[fileN]], row.names=FALSE)
-
-      # testing file for execution i
-      filePaths[fileN+1] <- file.path("data/test",paste("fold",i,"_test.csv",sep=""))
-      sel_traces <- data.table(number=folds[["testingSet"]][[i]], stringsAsFactors = FALSE)
-      sel_events <- events[which(events$number %in% sel_traces$number),]
-      write.csv(sel_events, file=filePaths[[fileN+1]], row.names=FALSE)
-
-      generate_log(paste("Files generated for cross-validation step",i,":",filePaths[fileN],"and",filePaths[fileN+1]),1)
-
-      fileN = fileN + 2
-   }
-   return(filePaths)
-}
-
-save_kfolds2 <- function(events, traces, folds, k)
-{
-   filePaths <- kfold_filenames(k)
-   fileN <- 1
-   for(i in 1:k)
-   {
-      # training file for execution i
-      sel_traces <- data.table(number=folds[["trainingSet"]][[i]], stringsAsFactors = FALSE)
-      sel_events <- events[which(events$number %in% sel_traces$number),]
-      write.csv(sel_events, file=filePaths[[fileN]], row.names=FALSE)
-
-      # testing file for execution i
-      sel_traces <- data.table(number=folds[["testingSet"]][[i]], stringsAsFactors = FALSE)
-      sel_events <- events[which(events$number %in% sel_traces$number),]
-      write.csv(sel_events, file=filePaths[[fileN+1]], row.names=FALSE)
-
-      generate_log(paste("Files generated for cross-validation step",i,":",filePaths[fileN],"and",filePaths[fileN+1]),1)
-
-      fileN = fileN + 2
-   }
-   return(filePaths)
-}
 
 #' Title
 #'
@@ -199,10 +145,4 @@ kfold_filenames <- function(k)
    }
    return(filePaths)
 }
-
-#   install.packages("microbenchmark")
-#   library(microbenchmark)
-#   microbenchmark(setorder(ds_,number,updated_at_stc))
-#   microbenchmark(setDT(ds)[order("number", "updated_at_stc")])
-
 
