@@ -83,3 +83,16 @@ corrplot(correlation_matrix, method = "square", type = "upper",
 
 cor.test(sds$remaining_stc,sds$caller_id, method = "spearman")
 chisq.test(x = sds$remaining_stc, y = sds$caller_id)
+
+
+
+# eta-squared
+install.packages("lsr")
+library(lsr)
+
+et <- etaSquared(rds)
+
+etaSquared()
+
+
+

@@ -35,7 +35,7 @@ STEP_2 <- function()
 
    # attribute selection step
    #sel_attributes <- attribute_selection(logfile,1)
-   sel_attributes <- c("incident_state", "category", "priority") # expert
+   #sel_attributes <- c("incident_state", "category", "priority") # expert
 
    # generating the indexes for the k-fold cross validation
    # they must be based on the traces, not on the events, so they may have distinct rows

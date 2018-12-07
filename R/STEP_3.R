@@ -23,7 +23,9 @@ STEP_3() # to execute for all folds and the six horizons
 
 #rm(events_list,events_row,model,model_list,model_row,predict,testingFold,trainingFold)
 #rm(logfile,ds,traces,folds,filePaths,ats_list,eval_stats_arr,eval_stats_arr_,eval_stats_t,eval_stats_t00)
-
+rm(eval_stats_arr,events_list,events_row,filePaths,model,model_list,model_row,predict,testingFold,trainingFold)
+rm(training_stats,validation_stats,rfn,startFold,endFold,statsFile)
+rm(fileN,i,j,startTime)
 
 STEP_3 <- function(horizons=c(1,3,5,6,7,Inf), justFold=0)
 {
@@ -60,14 +62,14 @@ STEP_3 <- function(horizons=c(1,3,5,6,7,Inf), justFold=0)
    fileN <- 1
    for ( i in startFold:endFold )
    {
-      fold_ats_list <- vector("list",length(horizons))
+      #fold_ats_list <- vector("list",length(horizons))
       trainingFold <- read.csv(file=filePaths[[fileN]]) #,nrows = 104)
       testingFold <- read.csv(file=filePaths[[fileN+1]]) #,nrows = 104)
       # build the annotaded transition system (MTA)
       generate_log(paste("***** Starting fold ",i," *****"))
       model_row <- NULL
       events_row <- NULL
-      rfn <- file.path("data/test",paste(statsFile,"fold_",i,"_pred.csv",sep=""))
+      rfn <- file.path("data/test",paste(statsFile,"_fold_",i,"_pred.csv",sep=""))
       for( j in 1:length(horizons) )
       {
          # builds the transition system
