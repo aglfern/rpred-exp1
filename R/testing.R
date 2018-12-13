@@ -78,3 +78,33 @@ rm(am1,am2,am3,am4,asd1,asd2,asd3,asd4,asdv,av1,av2,av4,avar1,avar2)
 #                   )
 #                },
 #                measurevar
+
+
+
+
+x <- sample(1:10, 100, replace=TRUE)
+y <- sample(1:10, 100, replace=TRUE)
+
+xerr <- abs(x-y)
+
+xmape <- MAPE(y,x)
+
+xm <- NULL
+for(i in 1:length(x)) {
+   xm[i] <- MAPE(y[i],x[i])
+}
+
+mean(xm)
+
+mean(y)-mean(x)/mean(x)
+
+Accuracy(y,x) # Accuracy <- mean(y_true == y_pred)
+
+o erro é relativo: não espero acertar exatamente nos segundos
+
+
+xt1 <- as.POSIXct(strptime("01/12/2018 22:10:15", "%d/%m/%Y %H:%M:%S"))
+xt2 <- as.POSIXct(strptime("01/12/2018 22:11:15", "%d/%m/%Y %H:%M:%S"))
+xi1 <- as.integer(xt1)
+xi2 <- as.integer(xt2)
+xi2 - xi1

@@ -43,6 +43,11 @@ NIL_STATE <- -1
 #    return(Result)
 # }
 
+
+
+
+
+
 #' funcao de construcao do MTA, recebe o trace, lista de instancias
 #' Código fonte original
 #'
@@ -169,40 +174,8 @@ build_ats <- function(aevents, horiz, sel_attributes)
          }
       }
       # Step 2, calculate the sojourn
-      curr_sojourn_set_state <- traceEvents[1,"set_state_id"]
-      curr_sojourn_mset_state <- traceEvents[1,"mset_state_id"]
-      curr_sojourn_seq_state <- traceEvents[1,"seq_state_id"]
-      curr_sojourn_set_stc <- 0
-      curr_sojourn_mset_stc <- 0
-      curr_sojourn_seq_stc <- 0
-      # first event of each case, the sojourn will be always zero
-      for (j in 2:nrow(traceEvents))
-      {
-         #print(paste("inicio loop 2: ",j))
+      calculate_sojourn_v2(traceEvents)
 
-         elapsed <- traceEvents[j,"elapsed_stc"]
-         # advances until it reaches a distinct state - for SET
-         if ( traceEvents[j,"set_state_id"] != curr_sojourn_set_state ) {
-            curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
-            traceEvents[j,"sojourn_set_stc"] <- elapsed - curr_sojourn_set_stc
-            curr_sojourn_set_stc <- elapsed
-         }
-
-         # now for MULTI-SET
-         if ( traceEvents[j,"mset_state_id"] != curr_sojourn_mset_state ) {
-            curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
-            traceEvents[j,"sojourn_mset_stc"] <- elapsed - curr_sojourn_mset_stc
-            curr_sojourn_mset_stc <- elapsed
-         }
-
-         # and now for SEQUENCE
-         if ( traceEvents[j,"seq_state_id"] != curr_sojourn_seq_state ) {
-            curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
-            traceEvents[j,"sojourn_seq_stc"] <- elapsed - curr_sojourn_seq_stc
-            curr_sojourn_seq_stc <- elapsed
-         }
-
-      } # fim j
       # armazena resultado das transicoes de estado para instancia atual
       # modelo de abstracao sequencia
       traces_states$seq_states[i] <- list(traceEvents[,"seq_state_id"])
@@ -242,8 +215,111 @@ build_ats <- function(aevents, horiz, sel_attributes)
 }
 
 
+#' Cálculo de Sojourn usado na primeira execução completa
+#' Não é o código original - foi modificado para seguir mais na linha do que foi
+#' proposto pelo van der Aalst no artigo de Time Prediction
+#'
+#' @param traceEvents
+#'
+#' @return
+#' @export
+#'
+#' @examples
+calculate_sojourn_v1 <- function(aTraceEvents) {
+
+   traceEvents <- aTraceEvents
+
+   curr_sojourn_set_state <- traceEvents[1,"set_state_id"]
+   curr_sojourn_mset_state <- traceEvents[1,"mset_state_id"]
+   curr_sojourn_seq_state <- traceEvents[1,"seq_state_id"]
+   curr_sojourn_set_stc <- 0
+   curr_sojourn_mset_stc <- 0
+   curr_sojourn_seq_stc <- 0
+   # first event of each case, the sojourn will be always zero
+   for (j in 2:nrow(traceEvents))
+   {
+      elapsed <- traceEvents[j,"elapsed_stc"]
+      # advances until it reaches a distinct state - for SET
+      if ( traceEvents[j,"set_state_id"] != curr_sojourn_set_state ) {
+         curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
+         traceEvents[j,"sojourn_set_stc"] <- elapsed - curr_sojourn_set_stc
+         curr_sojourn_set_stc <- elapsed
+      }
+
+      # now for MULTI-SET
+      if ( traceEvents[j,"mset_state_id"] != curr_sojourn_mset_state ) {
+         curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
+         traceEvents[j,"sojourn_mset_stc"] <- elapsed - curr_sojourn_mset_stc
+         curr_sojourn_mset_stc <- elapsed
+      }
+
+      # and now for SEQUENCE
+      if ( traceEvents[j,"seq_state_id"] != curr_sojourn_seq_state ) {
+         curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
+         traceEvents[j,"sojourn_seq_stc"] <- elapsed - curr_sojourn_seq_stc
+         curr_sojourn_seq_stc <- elapsed
+      }
+
+   } # fim j
+
+   eval.parent(substitute(aTraceEvents<-traceEvents))
+
+}
 
 
+
+#' Cálculo de Sojourn versão 2
+#' (na verdade, versão 3 se considerar a 1a como sendo a do código original)
+#' Neste caso a alteração é que o resultado do sojourn calculado deverá atualizar a
+#' célula j-1 e não a j.
+#'
+#' @param traceEvents
+#'
+#' @return
+#' @export
+#'
+#' @examples
+calculate_sojourn_v2 <- function(aTraceEvents) {
+
+   traceEvents <- aTraceEvents
+
+   # gets the first state for each abstraction, as the current
+   curr_sojourn_set_state <- traceEvents[1,"set_state_id"]
+   curr_sojourn_mset_state <- traceEvents[1,"mset_state_id"]
+   curr_sojourn_seq_state <- traceEvents[1,"seq_state_id"]
+   curr_sojourn_set_stc <- 0
+   curr_sojourn_mset_stc <- 0
+   curr_sojourn_seq_stc <- 0
+   # jump to second event as the update will be on j-1
+   for (j in 2:nrow(traceEvents))
+   {
+      elapsed <- traceEvents[j,"elapsed_stc"]
+      # advances until it reaches a distinct state - for SET
+      if ( traceEvents[j,"set_state_id"] != curr_sojourn_set_state ) {
+         curr_sojourn_set_state <- traceEvents[j,"set_state_id"]
+         traceEvents[j-1,"sojourn_set_stc"] <- elapsed - curr_sojourn_set_stc
+         curr_sojourn_set_stc <- elapsed
+      }
+
+      # now for MULTI-SET
+      if ( traceEvents[j,"mset_state_id"] != curr_sojourn_mset_state ) {
+         curr_sojourn_mset_state <- traceEvents[j,"mset_state_id"]
+         traceEvents[j-1,"sojourn_mset_stc"] <- elapsed - curr_sojourn_mset_stc
+         curr_sojourn_mset_stc <- elapsed
+      }
+
+      # and now for SEQUENCE
+      if ( traceEvents[j,"seq_state_id"] != curr_sojourn_seq_state ) {
+         curr_sojourn_seq_state <- traceEvents[j,"seq_state_id"]
+         traceEvents[j-1,"sojourn_seq_stc"] <- elapsed - curr_sojourn_seq_stc
+         curr_sojourn_seq_stc <- elapsed
+      }
+
+   } # fim j
+
+   eval.parent(substitute(aTraceEvents<-traceEvents))
+
+}
 
 #' funcao de construcao dos MTA recebe o trace, lista de instancias
 #'
@@ -409,7 +485,7 @@ build_prediction <- function(aevents, ats)
 
 
 
-#' Title
+#' DEPRECATED
 #'
 #' @param lsel_traces_list
 #'
@@ -502,7 +578,6 @@ eval_model_gen_fn <- function(events)
          summary_seq$sd[match(events_anot$seq_state_id, summary_seq$seq_state_id)] +
          summary_sj_seq$sd[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)] -
          events_anot$sojourn_seq_stc
-
 
       # remove valorers sem match para calculo erro
       incidentevtlog_anot_err <- na.omit(events_anot)
@@ -750,24 +825,11 @@ annotate_model <- function(fold_events, resultFile, type, fold, horiz)
    events_anot$sojourn_set_state_mean <-
       summary_sj_set$mean[match(events_anot$set_state_id, summary_sj_set$set_state_id)]
 
-   # prediction based in the mean and sojourn
-   events_anot$remaining_stc_pset_mean <-
-      events_anot$remaining_stc_set_state_mean +
-      events_anot$sojourn_set_state_mean -
-      events_anot$sojourn_set_stc
-
    # multi set
    events_anot$remaining_stc_mset_state_mean <-
       summary_mset$mean[match(events_anot$mset_state_id, summary_mset$mset_state_id)]
    events_anot$sojourn_mset_state_mean <-
       summary_sj_mset$mean[match(events_anot$mset_state_id, summary_sj_mset$mset_state_id)]
-
-   # prediction based in the mean and sojourn
-   events_anot$remaining_stc_pmset_mean <-
-      events_anot$remaining_stc_mset_state_mean +
-      events_anot$sojourn_mset_state_mean -
-      events_anot$sojourn_mset_stc
-
 
    # sequence
    events_anot$remaining_stc_seq_state_mean <-
@@ -776,11 +838,10 @@ annotate_model <- function(fold_events, resultFile, type, fold, horiz)
       summary_sj_seq$mean[match(events_anot$seq_state_id, summary_sj_seq$seq_state_id)]
 
    # prediction based in the mean and sojourn
-   events_anot$remaining_stc_pseq_mean <-
-      events_anot$remaining_stc_seq_state_mean +
-      events_anot$sojourn_seq_state_mean -
-      events_anot$sojourn_seq_stc
+   #calculate_prediction_f1(events_anot)
 
+   # prediction based only in the mean
+   calculate_prediction_f2(events_anot)
 
 
    # remove valorers sem match para calculo erro
@@ -851,4 +912,58 @@ annotate_model <- function(fold_events, resultFile, type, fold, horiz)
    return(result)
 
 }
+
+
+#' Fórmula 1 para o cálculo da predição, que leva em conta o sojourn atual e a média
+#' de sojourn no estado. É a fórmula do código original.
+#'
+#' @param events_anot
+#'
+#' @return
+#' @export
+#'
+#' @examples
+calculate_prediction_f1 <- function(aevents_anot) {
+
+   events_anot <- aevents_anot
+
+   events_anot$remaining_stc_pset_mean <-
+      events_anot$remaining_stc_set_state_mean +
+      events_anot$sojourn_set_state_mean -
+      events_anot$sojourn_set_stc
+
+   events_anot$remaining_stc_pmset_mean <-
+      events_anot$remaining_stc_mset_state_mean +
+      events_anot$sojourn_mset_state_mean -
+      events_anot$sojourn_mset_stc
+
+   events_anot$remaining_stc_pseq_mean <-
+      events_anot$remaining_stc_seq_state_mean +
+      events_anot$sojourn_seq_state_mean -
+      events_anot$sojourn_seq_stc
+
+   eval.parent(substitute(aevents_anot<-events_anot))
+
+}
+
+#' Fórmula 2, que leva em conta apenas a média do remaining.
+#'
+#' @param events_anot
+#'
+#' @return
+#' @export
+#'
+#' @examples
+calculate_prediction_f2 <- function(aevents_anot) {
+
+   events_anot <- aevents_anot
+
+   events_anot$remaining_stc_pset_mean <- events_anot$remaining_stc_set_state_mean
+   events_anot$remaining_stc_pmset_mean <- events_anot$remaining_stc_mset_state_mean
+   events_anot$remaining_stc_pseq_mean <- events_anot$remaining_stc_seq_state_mean
+
+   eval.parent(substitute(aevents_anot<-events_anot))
+
+}
+
 
