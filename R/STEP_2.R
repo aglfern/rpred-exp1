@@ -19,6 +19,12 @@ KFOLDS <- 5 # number of folds for the k-fold cross validation strategy
 
 STEP_2()
 
+STEP_2_1()
+
+STEP_2_1_AB()
+
+STEP_2_1(infn="step1_ds3.csv",outfn="preproc_ds3.csv")
+
 #rm(events_list,events_row,model,model_list,model_row,predict,testingFold,trainingFold)
 #rm(logfile,ds,traces,folds,filePaths,ats_list,eval_stats_arr,eval_stats_arr_,eval_stats_t,eval_stats_t00)
 
@@ -48,7 +54,48 @@ STEP_2 <- function()
 
 }
 
+#
+# Step to only preprocess the data and save it into one single file
+# The output format is the same as the KFOLDs, ready to be processed by the MTA build
+#
+STEP_2_1 <- function(infn="step1_ds1.csv",outfn="preproc_ds1.csv")
+{
+   generate_log(" ************* Initiating STEP 2.1 *************", 1)
 
+   logfile <- read.csv2(file.path("data", infn))
+   generate_log(paste("Log file loaded with ", nrow(logfile), " rows and ", ncol(logfile), " columns"),1)
+
+   # pre-processing: date/time field handling, id handling.
+   ds = dataset_preproc_version1(logfile,2)
+
+   write.csv(ds, file=file.path("data", outfn), row.names=FALSE)
+
+}
+
+
+#
+# Step to only preprocess the data and save it into one single file
+# The output format is the same as the KFOLDs, ready to be processed by the MTA build
+#
+STEP_2_1_AB <- function()
+{
+   generate_log(" ************* Initiating STEP 2.1 for sets A and B *************", 1)
+
+   logfileA <- read.csv2(file.path("data", "step1_ds1.csv"))
+   generate_log(paste("Log file loaded with ", nrow(logfileA), " rows and ", ncol(logfileA), " columns"),1)
+
+   logfileB <- read.csv2(file.path("data", "step1_ds2.csv"))
+   generate_log(paste("Log file loaded with ", nrow(logfileB), " rows and ", ncol(logfileB), " columns"),1)
+
+   logfile <- rbind(logfileA,logfileB)
+   generate_log(paste("Final log file loaded with ", nrow(logfile), " rows and ", ncol(logfile), " columns"),1)
+
+   # pre-processing: date/time field handling, id handling.
+   ds = dataset_preproc_version1(logfile,2)
+
+   write.csv(ds, file=file.path("data", "preproc_ds1and2.csv"), row.names=FALSE)
+
+}
 
 #' Saves the folds into separated CSV files, returning the filepaths
 #'

@@ -884,6 +884,8 @@ annotate_model <- function(fold_events, resultFile, type, fold, horiz)
 
    non_fit_per_arr <- non_fit_per_arr * 100
 
+   # Alexandre: precisa remover esse cálculo aqui, não faz nenhum sentido repetir esse valor
+   # vide comentário na função original - isso era um mínimo entre média e mediana
    perr_tot_arr <- c(mape_val[c("val_mape_pset_mean")],
                      mape_val[c("val_mape_pmset_mean")],
                      mape_val[c("val_mape_pseq_mean")])

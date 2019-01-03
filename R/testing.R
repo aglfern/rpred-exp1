@@ -100,7 +100,7 @@ mean(y)-mean(x)/mean(x)
 
 Accuracy(y,x) # Accuracy <- mean(y_true == y_pred)
 
-o erro é relativo: não espero acertar exatamente nos segundos
+#o erro é relativo: não espero acertar exatamente nos segundos
 
 
 xt1 <- as.POSIXct(strptime("01/12/2018 22:10:15", "%d/%m/%Y %H:%M:%S"))
@@ -108,3 +108,8 @@ xt2 <- as.POSIXct(strptime("01/12/2018 22:11:15", "%d/%m/%Y %H:%M:%S"))
 xi1 <- as.integer(xt1)
 xi2 <- as.integer(xt2)
 xi2 - xi1
+
+
+
+# código para converter factors em numeric
+yourdat[] <- lapply(yourdat, function(x) if(is.factor(x)) as.numeric(levels(x))[x] else x)

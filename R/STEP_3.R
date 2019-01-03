@@ -11,6 +11,7 @@ TRACE_ID_COLUMN_NAME <- "number"
 STATUS_COLUMN_NAME <- "incident_state"
 EVENT_TIMESTAMP_COLUMN_NAME <- "updated_at"
 CLOSED_STATUS_VALUE <- "Closed"
+REMOVE_LONGER_CASES <- FALSE
 
 
 KFOLDS <- 5 # number of folds for the k-fold cross validation strategy
@@ -26,6 +27,14 @@ STEP_3() # to execute for all folds and the six horizons
 rm(eval_stats_arr,events_list,events_row,filePaths,model,model_list,model_row,predict,testingFold,trainingFold)
 rm(training_stats,validation_stats,rfn,startFold,endFold,statsFile)
 rm(fileN,i,j,startTime)
+
+xxeval <- copy(eval_stats_df3)
+for(i in 8:27) {
+   xxeval[,i] <- as.numeric(as.character(xxeval[,i]))
+}
+xxgrp <- summarise_all (
+   group_by(xxeval, sel_fields, k_fold, n_repet, max_itens, rem_outl, horizon, fold),
+   funs(mean, sd))
 
 STEP_3 <- function(horizons=c(1,3,5,6,7,Inf), justFold=0)
 {
@@ -64,6 +73,18 @@ STEP_3 <- function(horizons=c(1,3,5,6,7,Inf), justFold=0)
    {
       #fold_ats_list <- vector("list",length(horizons))
       trainingFold <- read.csv(file=filePaths[[fileN]]) #,nrows = 104)
+
+      #option to remove from the training the outliers with elapsed time much bigger
+      if ( REMOVE_LONGER_CASES == TRUE ) {
+         q <- quantile(trainingFold$elapsed_stc,0.99)
+         onePerc <- trainingFold[trainingFold$elapsed_stc > q,c("number","elapsed_stc")]
+         onePercDist <- distinct(onePerc,onePerc$number)
+         colnames(onePercDist) <- c("number")
+         generate_log(paste("Removing ",nrow(onePercDist)," traces that have elapsed times bigger than [",q,"] seconds"))
+         '%ni%' <- Negate('%in%')
+         trainingFold <- trainingFold[trainingFold$number %ni% onePercDist$number,]
+      }
+
       testingFold <- read.csv(file=filePaths[[fileN+1]]) #,nrows = 104)
       # build the annotaded transition system (MTA)
       generate_log(paste("***** Starting fold ",i," *****"))
